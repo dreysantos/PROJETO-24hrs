@@ -561,13 +561,31 @@ function adicionarHistorico(dados) {
 function gerarDadosSimulados() {
     const agora = new Date();
     const segundos = Date.now() / 1000;
-    const ciclo = Math.sin(segundos / 9);
-    const bateria = limitarNumero(76 + ciclo * 18, 8, 100);
+    const cicloEnergia = Math.sin(segundos / 9);
+    const faseReservatorio = segundos % 36;
+    const bateria = limitarNumero(76 + cicloEnergia * 18, 8, 100);
     const tensaoBateria = 10.8 + bateria * 0.055;
     const tensaoSolar = limitarNumero(15 + Math.sin(segundos / 6) * 4, 0, 22);
     const corrente = limitarNumero(1.8 + Math.abs(Math.sin(segundos / 4)) * 2.4, 0, 8);
-    const nivel = bateria < 25 ? "BAIXO" : ciclo > 0.35 ? "CHEIO" : "MEDIO";
-    const bomba = bateria < 20 ? "PAUSADA" : nivel === "BAIXO" ? "LIGADA" : "DESLIGADA";
+
+    let nivel = "MEDIO";
+    let bomba = "LIGADA";
+
+    if (faseReservatorio < 10) {
+        nivel = "BAIXO";
+        bomba = "LIGADA";
+    } else if (faseReservatorio < 24) {
+        nivel = "MEDIO";
+        bomba = "LIGADA";
+    } else {
+        nivel = "CHEIO";
+        bomba = "DESLIGADA";
+    }
+
+    if (bateria < 20) {
+        bomba = "PAUSADA";
+    }
+
     const alerta = definirAlertaLeitura({ nivel, tensaoBateria, corrente });
 
     return {
