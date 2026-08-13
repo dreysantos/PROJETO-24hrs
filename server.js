@@ -24,10 +24,6 @@ const BANCO_ARQUIVO = process.env.BANCO_ARQUIVO || path.join(__dirname, "data", 
 const SALVAR_SIMULADOS = process.env.SALVAR_SIMULADOS !== "false";
 const INTERVALO_GRAVACAO_MS = Number(process.env.INTERVALO_GRAVACAO_MS) || 5000;
 const URL_PUBLICA = (process.env.URL_PUBLICA || "").replace(/\/$/, "");
-const SUPABASE_URL = (process.env.SUPABASE_URL || "").replace(/\/$/, "");
-const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
-const SUPABASE_TABELA = process.env.SUPABASE_TABELA || "leituras";
-const SUPABASE_ATIVO = Boolean(SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY);
 const MODO_OPERACAO_INICIAL = process.env.MODO_OPERACAO || "automatico";
 
 let ultimaLeituraReal = 0;
@@ -97,7 +93,7 @@ app.use((req, res, next) => {
         res.header("Vary", "Origin");
     }
 
-    res.header("Access-Control-Allow-Methods", "GET, HEAD, OPTIONS");
+    res.header("Access-Control-Allow-Methods", "GET, HEAD, POST, OPTIONS");
     res.header("Access-Control-Allow-Headers", "Content-Type");
     if (req.method === "OPTIONS") {
         return res.sendStatus(204);
@@ -299,7 +295,7 @@ function criarRegistroLeitura(dados) {
 }
 
 function inicializarBanco() {
-    if (!BANCO_ATIVO || SUPABASE_ATIVO) {
+    if (!BANCO_ATIVO) {
         return;
     }
 
@@ -310,127 +306,6 @@ function inicializarBanco() {
     }
 
     historico = lerLeiturasSalvas(LIMITE_HISTORICO);
-}
-
-function registroParaSupabase(registro) {
-    return {
-        data_iso: registro.dataISO,
-        horario: registro.horario,
-        nivel: registro.nivel,
-        bomba: registro.bomba,
-        corrente: registro.corrente,
-        tensao_bateria: registro.tensaoBateria,
-        carga_bateria: registro.cargaBateria,
-        tensao_solar: registro.tensaoSolar,
-        alerta: registro.alerta,
-        conexao: registro.conexao,
-        simulado: registro.simulado
-    };
-}
-
-function supabaseParaRegistro(registro) {
-    return {
-        id: String(registro.id || ""),
-        dataISO: registro.data_iso || registro.created_at || "",
-        horario: registro.horario || "",
-        nivel: registro.nivel || "",
-        bomba: registro.bomba || "",
-        corrente: Number(registro.corrente) || 0,
-        tensaoBateria: Number(registro.tensao_bateria) || 0,
-        cargaBateria: Number(registro.carga_bateria) || 0,
-        tensaoSolar: Number(registro.tensao_solar) || 0,
-        alerta: registro.alerta || "",
-        conexao: registro.conexao || "",
-        simulado: Boolean(registro.simulado)
-    };
-}
-
-function supabaseRequest(metodo, caminho, corpo = null, cabecalhosExtras = {}) {
-    return new Promise((resolve, reject) => {
-        const url = new URL(`${SUPABASE_URL}/rest/v1/${caminho}`);
-        const payload = corpo ? JSON.stringify(corpo) : null;
-
-        const req = https.request({
-            method: metodo,
-            hostname: url.hostname,
-            path: `${url.pathname}${url.search}`,
-            headers: {
-                apikey: SUPABASE_SERVICE_ROLE_KEY,
-                Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
-                "Content-Type": "application/json",
-                ...cabecalhosExtras
-            }
-        }, (res) => {
-            let dados = "";
-
-            res.on("data", (chunk) => {
-                dados += chunk;
-            });
-
-            res.on("end", () => {
-                if (res.statusCode < 200 || res.statusCode >= 300) {
-                    return reject(new Error(`Supabase HTTP ${res.statusCode}: ${dados.substring(0, 200)}`));
-                }
-
-                if (!dados) {
-                    return resolve({ dados: null, headers: res.headers });
-                }
-
-                try {
-                    resolve({ dados: JSON.parse(dados), headers: res.headers });
-                } catch (erro) {
-                    reject(new Error("Resposta invalida do Supabase"));
-                }
-            });
-        });
-
-        req.on("error", reject);
-
-        if (payload) {
-            req.write(payload);
-        }
-
-        req.end();
-    });
-}
-
-async function salvarLeituraSupabase(registro) {
-    if (!SUPABASE_ATIVO) {
-        return false;
-    }
-
-    await supabaseRequest("POST", SUPABASE_TABELA, registroParaSupabase(registro), {
-        Prefer: "return=minimal"
-    });
-    return true;
-}
-
-async function lerLeiturasSupabase(limite = LIMITE_HISTORICO) {
-    if (!SUPABASE_ATIVO) {
-        return [];
-    }
-
-    const query = new URLSearchParams({
-        select: "*",
-        order: "data_iso.desc",
-        limit: String(limite)
-    });
-
-    const resposta = await supabaseRequest("GET", `${SUPABASE_TABELA}?${query.toString()}`);
-    return (resposta.dados || []).map(supabaseParaRegistro).reverse();
-}
-
-async function contarLeiturasSupabase() {
-    if (!SUPABASE_ATIVO) {
-        return 0;
-    }
-
-    const resposta = await supabaseRequest("GET", `${SUPABASE_TABELA}?select=id&limit=1`, null, {
-        Prefer: "count=exact"
-    });
-    const contentRange = resposta.headers["content-range"] || "";
-    const total = Number(contentRange.split("/")[1]);
-    return Number.isFinite(total) ? total : 0;
 }
 
 function lerLeiturasSalvas(limite = LIMITE_HISTORICO) {
@@ -449,15 +324,6 @@ function lerLeiturasSalvas(limite = LIMITE_HISTORICO) {
 }
 
 async function lerLeiturasBanco(limite = LIMITE_HISTORICO) {
-    if (SUPABASE_ATIVO) {
-        try {
-            return await lerLeiturasSupabase(limite);
-        } catch (erro) {
-            console.error("Erro ao ler Supabase, usando fallback local:", erro.message);
-            return lerLeiturasSalvas(limite);
-        }
-    }
-
     return lerLeiturasSalvas(limite);
 }
 
@@ -533,7 +399,7 @@ function selecionarAlertas(leituras) {
 }
 
 function valorCSV(valor) {
-    const texto = String(valor ?? "");
+    const texto = String(valor == null ? "" : valor);
     return `"${texto.replaceAll('"', '""')}"`;
 }
 
@@ -583,6 +449,21 @@ function contarLeiturasSalvas() {
     return conteudo ? conteudo.split(/\r?\n/).length : 0;
 }
 
+async function salvarLeituraLocal(registro) {
+    if (!BANCO_ATIVO) {
+        return false;
+    }
+
+    try {
+        fs.mkdirSync(path.dirname(BANCO_ARQUIVO), { recursive: true });
+        await fs.promises.appendFile(BANCO_ARQUIVO, `${JSON.stringify(registro)}\n`, "utf8");
+        return true;
+    } catch (erro) {
+        console.error("Erro ao salvar localmente:", erro.message);
+        return false;
+    }
+}
+
 function salvarLeituraBanco(registro) {
     if (!BANCO_ATIVO || (!SALVAR_SIMULADOS && registro.simulado)) {
         return;
@@ -596,21 +477,11 @@ function salvarLeituraBanco(registro) {
     ultimaGravacaoBanco = agora;
     filaBanco = filaBanco
         .then(async() => {
-            if (SUPABASE_ATIVO) {
-                await salvarLeituraSupabase(registro);
-                return;
-            }
-
-            await fs.promises.appendFile(BANCO_ARQUIVO, `${JSON.stringify(registro)}\n`, "utf8");
+            await salvarLeituraLocal(registro);
         })
         .catch((erro) => {
             console.error("Erro ao salvar leitura no banco:", erro.message);
-
-            if (SUPABASE_ATIVO) {
-                fs.mkdirSync(path.dirname(BANCO_ARQUIVO), { recursive: true });
-                return fs.promises.appendFile(BANCO_ARQUIVO, `${JSON.stringify(registro)}\n`, "utf8")
-                    .catch((erroLocal) => console.error("Erro no fallback local:", erroLocal.message));
-            }
+            return salvarLeituraLocal(registro);
         });
 }
 
@@ -721,7 +592,7 @@ function obterDadosAtuais() {
 
     if (modoOperacao === "arduino" && (dadosArduino.simulado || dadosArduino.conexao !== "online" || semLeituraReal)) {
         const aguardando = {
-            ...criarDadosBase(MODO_CLOUD ? "cloud" : dadosArduino.conexao === "online" ? "online" : "offline"),
+            ...criarDadosBase(MODO_CLOUD ? "cloud" : portaSerial?.isOpen ? "online" : "offline"),
             modoOperacao
         };
         registrarCodigoConsulta(aguardando.tokenAcesso);
@@ -795,7 +666,8 @@ async function conectarArduino() {
                             throw new Error("Linha muito longa");
                         }
 
-                        const dadosValidados = validarDadosArduino(JSON.parse(linha.trim()));
+                        const texto = linha.trim().replace(/^[^\{\[]+/, "");
+                        const dadosValidados = validarDadosArduino(JSON.parse(texto));
                         if (!dadosValidados) {
                             throw new Error("Formato invalido");
                         }
@@ -917,6 +789,7 @@ app.post("/modo", (req, res) => {
     res.setHeader("Cache-Control", "no-store");
     res.json({
         modo: modoOperacao,
+        arduino: dadosArduino.conexao,
         mensagem: "Modo atualizado"
     });
 });
@@ -1004,7 +877,7 @@ app.get("/saude", (req, res) => {
         modoCloud: MODO_CLOUD,
         simulacaoAutomatica: SIMULACAO_AUTOMATICA,
         bancoAtivo: BANCO_ATIVO,
-        bancoTipo: SUPABASE_ATIVO ? "supabase" : "local",
+        bancoTipo: BANCO_ATIVO ? "local" : "desativado",
         salvarSimulados: SALVAR_SIMULADOS,
         tempo: new Date().toLocaleTimeString("pt-BR")
     });
@@ -1068,7 +941,7 @@ app.get("/diagnostico", async(req, res) => {
 
     let leiturasSalvas = 0;
     try {
-        leiturasSalvas = SUPABASE_ATIVO ? await contarLeiturasSupabase() : contarLeiturasSalvas();
+        leiturasSalvas = contarLeiturasSalvas();
     } catch (erro) {
         console.error("Erro ao contar leituras:", erro.message);
         leiturasSalvas = contarLeiturasSalvas();
@@ -1080,16 +953,15 @@ app.get("/diagnostico", async(req, res) => {
         modoCloud: MODO_CLOUD,
         modoOperacao,
         simulacaoAutomatica: SIMULACAO_AUTOMATICA,
-        portaArduino: MODO_CLOUD ? "desativada no modo cloud" : PORTA_ARDUINO,
+        portaArduino: MODO_CLOUD ? "desativada no modo cloud" : PORTAS_ARDUINO.join(", "),
         baudRate: BAUD_RATE,
         conexaoArduino: dadosArduino.conexao,
         ultimaAtualizacao: dadosArduino.ultimaAtualizacao,
         leiturasNoHistorico: historico.length,
         banco: {
             ativo: BANCO_ATIVO,
-            tipo: SUPABASE_ATIVO ? "supabase" : "local",
-            tabela: SUPABASE_ATIVO ? SUPABASE_TABELA : "",
-            arquivo: BANCO_ATIVO && !SUPABASE_ATIVO ? BANCO_ARQUIVO : "desativado",
+            tipo: BANCO_ATIVO ? "local" : "desativado",
+            arquivo: BANCO_ATIVO ? BANCO_ARQUIVO : "desativado",
             salvarSimulados: SALVAR_SIMULADOS,
             intervaloGravacaoMs: INTERVALO_GRAVACAO_MS,
             leiturasSalvas

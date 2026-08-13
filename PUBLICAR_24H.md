@@ -8,7 +8,7 @@ Com o PC desligado, o site continua aberto, mas o Arduino USB não envia leitura
 
 Para receber dados reais com o PC desligado, use uma destas opcoes:
 
-- Trocar o Arduino por ESP32/ESP8266 com Wi-Fi.
+- Como melhoria futura, substituir a dependência da conexão USB com o computador por transmissão Wi-Fi utilizando ESP32, permitindo monitoramento sem fio.
 - Usar Raspberry Pi ligado ao Arduino e a internet.
 - Enviar dados do Arduino/PC para um banco online ou MQTT enquanto o PC estiver ligado.
 

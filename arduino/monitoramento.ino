@@ -113,6 +113,7 @@ void loop() {
                 ",\"alerta\":\"" + alerta + "\"}";
 
   Serial.println(json);
+  Serial.flush();
 
   lcd.setCursor(0, 0);
   if (!sensorBaixo && !sensorAlto) {

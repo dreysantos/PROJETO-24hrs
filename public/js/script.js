@@ -9,11 +9,9 @@ const ids = {
     nivelAgua: "nivelAgua",
     statusBomba: "statusBomba",
     corrente: "corrente",
-    bateria: "bateria",
     solar: "solar",
     alerta: "alerta",
     barraNivel: "barraNivel",
-    barraBateria: "barraBateria",
     barraSolar: "barraSolar",
     barraCorrente: "barraCorrente",
     lcdLinha1: "lcdLinha1",
@@ -28,7 +26,7 @@ function elemento(id) {
 }
 
 function escaparHTML(valor) {
-    return String(valor ? ? "")
+    return String(valor ? valor : "")
         .replaceAll("&", "&amp;")
         .replaceAll("<", "&lt;")
         .replaceAll(">", "&gt;")
@@ -107,7 +105,7 @@ function atualizarStatusConexao(online = false, conexaoArduino = "offline", simu
 }
 
 function limparClasses() {
-    [ids.nivelAgua, ids.statusBomba, ids.bateria, ids.alerta, ids.corrente, ids.solar].forEach((id) => {
+    [ids.nivelAgua, ids.statusBomba, ids.alerta, ids.corrente, ids.solar].forEach((id) => {
         const el = elemento(id);
         if (el) {
             el.className = "valor";
@@ -185,7 +183,6 @@ function desenharGrafico() {
 
     for (let i = 0; i <= 4; i++) {
         const y = area.topo + ((area.baixo - area.topo) / 4) * i;
-        const bateria = 100 - i * 25;
         const solar = 25 - i * 6.25;
 
         ctx.beginPath();
@@ -193,25 +190,17 @@ function desenharGrafico() {
         ctx.lineTo(area.direita, y);
         ctx.stroke();
 
-        ctx.textAlign = "right";
-        ctx.fillText(`${bateria}%`, area.esquerda - 8, y);
-
         ctx.textAlign = "left";
         ctx.fillText(`${solar.toFixed(solar % 1 === 0 ? 0 : 1)}V`, area.direita + 8, y);
     }
 
-    const corBateria = getComputedStyle(document.documentElement).getPropertyValue("--brand-strong").trim() || "#149a7f";
     const corSolar = getComputedStyle(document.documentElement).getPropertyValue("--accent").trim() || "#f6a01a";
 
     ctx.textBaseline = "alphabetic";
-    ctx.textAlign = "left";
-    ctx.fillStyle = corBateria;
-    ctx.fillText("Bateria (%)", area.esquerda, 16);
-    ctx.fillStyle = corSolar;
     ctx.textAlign = "right";
+    ctx.fillStyle = corSolar;
     ctx.fillText("Solar (V)", area.direita, 16);
 
-    desenharLinha(ctx, pontos, "cargaBateria", corBateria, area, maxX, 100, "%");
     desenharLinha(ctx, pontos, "tensaoSolar", corSolar, area, maxX, 25, "V");
 }
 
@@ -276,15 +265,12 @@ function atualizarPainel(dados) {
     const nivel = dados.nivel || "INDEFINIDO";
     const bomba = dados.bomba || "INDEFINIDO";
     const corrente = Number(dados.corrente) || 0;
-    const tensaoBateria = Number(dados.tensaoBateria) || 0;
-    const cargaBateria = Number(dados.cargaBateria) || 0;
     const tensaoSolar = Number(dados.tensaoSolar) || 0;
     const alerta = dados.alerta || "INDEFINIDO";
 
     texto(ids.nivelAgua, nivel);
     texto(ids.statusBomba, bomba);
     texto(ids.corrente, `${corrente.toFixed(2)} A`);
-    texto(ids.bateria, `${tensaoBateria.toFixed(1)}V - ${Math.round(cargaBateria)}%`);
     texto(ids.solar, `${tensaoSolar.toFixed(1)} V`);
     texto(ids.alerta, alerta);
 
@@ -293,24 +279,21 @@ function atualizarPainel(dados) {
     definirClasseStatus(ids.alerta, alerta === "NORMAL" ? "status-normal" : "status-alerta");
     definirClasseStatus(ids.nivelAgua, nivel === "CHEIO" ? "status-alerta" : nivel === "MEDIO" ? "status-atencao" : "status-alerta");
     definirClasseStatus(ids.statusBomba, bomba === "LIGADA" ? "status-atencao" : "status-normal");
-    definirClasseStatus(ids.bateria, tensaoBateria < 11.5 ? "status-alerta" : cargaBateria < 35 ? "status-atencao" : "status-normal");
     definirClasseStatus(ids.corrente, corrente > 4 ? "status-alerta" : "status-normal");
     definirClasseStatus(ids.solar, tensaoSolar < 10 ? "status-atencao" : "status-normal");
 
     atualizarBarra(ids.barraNivel, percentualNivel(nivel), nivel === "CHEIO" || nivel === "BAIXO" ? "alerta" : nivel === "MEDIO" ? "atencao" : "normal");
-    atualizarBarra(ids.barraBateria, cargaBateria, cargaBateria < 25 ? "alerta" : cargaBateria < 45 ? "atencao" : "normal");
     atualizarBarra(ids.barraSolar, (tensaoSolar / 22) * 100, tensaoSolar < 10 ? "atencao" : "normal");
     atualizarBarra(ids.barraCorrente, (corrente / 8) * 100, corrente > 4 ? "alerta" : "normal");
 
     atualizarLCD(
         "TANQUE DE AGUA",
         `NIVEL: ${nivel}`,
-        `BAT:${tensaoBateria.toFixed(1)}V ${Math.round(cargaBateria)}%`,
-        `SOLAR:${tensaoSolar.toFixed(1)}V`
+        `SOLAR:${tensaoSolar.toFixed(1)}V`,
+        `${corrente.toFixed(2)}A`
     );
 
     historicoLocal.push({
-        cargaBateria,
         tensaoSolar,
         corrente,
         horario: dados.ultimaAtualizacao
@@ -365,7 +348,7 @@ function classeAlerta(alerta) {
 }
 
 function tokenAtualLocal(idCampo) {
-    return elemento(idCampo) ? .value || new URLSearchParams(window.location.search).get("token") || "";
+    return elemento(idCampo)?.value || new URLSearchParams(window.location.search).get("token") || "";
 }
 
 function camposToken() {
@@ -374,7 +357,7 @@ function camposToken() {
 
 function renderizarTokenAcesso(dados) {
     const consultas = document.querySelectorAll(".consulta-box, .modo-box");
-    if (!consultas.length || !dados ? .token) {
+    if (!consultas.length || !dados?.token) {
         return;
     }
 
@@ -387,7 +370,7 @@ function renderizarTokenAcesso(dados) {
         }
 
         const paginaAtual = window.location.pathname.replace(/^\//, "").replace(/\.html$/, "");
-        const linkAtual = dados.links ? .[paginaAtual] || `${window.location.origin}${window.location.pathname}?token=${encodeURIComponent(dados.token)}`;
+        const linkAtual = dados.links?.[paginaAtual] || `${window.location.origin}${window.location.pathname}?token=${encodeURIComponent(dados.token)}`;
         box.innerHTML = `
             <strong>Código da leitura</strong>
             <code>${escaparHTML(dados.token)}</code>
@@ -414,7 +397,7 @@ function renderizarTokenAcesso(dados) {
 
 async function carregarTokenAcesso(forcar = false) {
     const tokenUrl = new URLSearchParams(window.location.search).get("token");
-    if (!forcar && tokenAcessoCache ? .token) {
+    if (!forcar && tokenAcessoCache?.token) {
         return tokenAcessoCache;
     }
 

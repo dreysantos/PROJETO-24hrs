@@ -1,6 +1,6 @@
 # Sistema Mecatrônico Social de Baixo Custo
 
-Painel de monitoramento em tempo real para um sistema mecatrônico social completo de baixo custo, com controle inteligente de água, energia solar e bateria. O projeto usa Arduino, Node.js e uma interface web responsiva para demonstrar aplicação em residências de baixa renda, escolas públicas, hortas comunitárias e pequenos espaços rurais.
+Painel de monitoramento em tempo real para um sistema mecatrônico social de baixo custo, com controle inteligente de água, energia solar e bateria. O projeto usa Arduino, Node.js e uma interface web responsiva para demonstrar aplicação em escolas, organizações comunitárias, pequenas empresas, associações, hortas comunitárias, cooperativas e outros espaços coletivos.
 
 ## Recursos
 
