@@ -183,6 +183,7 @@ function desenharGrafico() {
 
     for (let i = 0; i <= 4; i++) {
         const y = area.topo + ((area.baixo - area.topo) / 4) * i;
+        const nivel = 100 - i * 25;
         const solar = 25 - i * 6.25;
 
         ctx.beginPath();
@@ -190,18 +191,29 @@ function desenharGrafico() {
         ctx.lineTo(area.direita, y);
         ctx.stroke();
 
+        ctx.textAlign = "right";
+        ctx.fillText(`${nivel}%`, area.esquerda - 8, y);
+
         ctx.textAlign = "left";
         ctx.fillText(`${solar.toFixed(solar % 1 === 0 ? 0 : 1)}V`, area.direita + 8, y);
     }
 
+    const corNivel = getComputedStyle(document.documentElement).getPropertyValue("--brand-strong").trim() || "#149a7f";
     const corSolar = getComputedStyle(document.documentElement).getPropertyValue("--accent").trim() || "#f6a01a";
+    const corBomba = getComputedStyle(document.documentElement).getPropertyValue("--danger").trim() || "#c62828";
 
     ctx.textBaseline = "alphabetic";
+    ctx.textAlign = "left";
+    ctx.fillStyle = corNivel;
+    ctx.fillText("Nivel (%)", area.esquerda, 16);
+
     ctx.textAlign = "right";
     ctx.fillStyle = corSolar;
     ctx.fillText("Solar (V)", area.direita, 16);
 
+    desenharLinha(ctx, pontos, "nivelPercentual", corNivel, area, maxX, 100, "%");
     desenharLinha(ctx, pontos, "tensaoSolar", corSolar, area, maxX, 25, "V");
+    desenharPontosBomba(ctx, pontos, corBomba, area, maxX);
 }
 
 function desenharLinha(ctx, pontos, campo, cor, area, maxX, maxY, unidade) {
@@ -238,6 +250,28 @@ function desenharLinha(ctx, pontos, campo, cor, area, maxX, maxY, unidade) {
     ctx.textAlign = "left";
     ctx.textBaseline = "middle";
     ctx.fillText(`${valorFinal.toFixed(casas)}${unidade}`, xFinal + 8, yFinal);
+}
+
+function desenharPontosBomba(ctx, pontos, cor, area, maxX) {
+    ctx.fillStyle = cor;
+
+    pontos.forEach((ponto, index) => {
+        if (!ponto.bombaLigada) {
+            return;
+        }
+
+        const x = area.esquerda + ((area.direita - area.esquerda) / maxX) * index;
+        const y = area.baixo + 16;
+
+        ctx.beginPath();
+        ctx.arc(x, y, 3, 0, Math.PI * 2);
+        ctx.fill();
+    });
+
+    ctx.font = "12px Arial";
+    ctx.textAlign = "left";
+    ctx.textBaseline = "alphabetic";
+    ctx.fillText("Bomba ligada", area.esquerda, area.baixo + 28);
 }
 
 function atualizarPainel(dados) {
@@ -294,8 +328,10 @@ function atualizarPainel(dados) {
     );
 
     historicoLocal.push({
+        nivelPercentual: percentualNivel(nivel),
         tensaoSolar,
         corrente,
+        bombaLigada: bomba === "LIGADA",
         horario: dados.ultimaAtualizacao
     });
 
